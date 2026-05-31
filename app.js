@@ -1,30 +1,9 @@
-// Initial Sample Data
-const initialData = [
-    {
-        id: 1,
-        companyName: '株式会社サンプル',
-        testType: 'SPI',
-        testDate: '2025-03',
-        details: 'テストセンターでの受験でした。非言語が難しめだったので、推論と確率の対策をしっかりやっておくことをおすすめします。',
-        createdAt: '2024-05-20T10:00:00Z'
-    },
-    {
-        id: 2,
-        companyName: 'テスト・テクノロジー株式会社',
-        testType: 'コーディングテスト',
-        testDate: '2025-04',
-        details: 'Trackというプラットフォームを使ったコーディングテスト。アルゴリズム問題が2問（制限時間90分）。動的計画法の基礎が出ました。',
-        createdAt: '2024-05-19T14:30:00Z'
-    },
-    {
-        id: 3,
-        companyName: 'グローバル商事',
-        testType: '玉手箱',
-        testDate: '2025-02',
-        details: 'Web自宅受験。計数理解と英語がありました。英語の長文読解は時間がタイトなので、スピードを意識して解く必要があります。',
-        createdAt: '2024-05-18T09:15:00Z'
-    }
-];
+// Supabase Configuration
+const SUPABASE_URL = 'https://lzoknthucbqqqtpsuitj.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6b2tudGh1Y2JxcXF0cHN1aXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAxMDY0NjUsImV4cCI6MjA5NTY4MjQ2NX0.RVWfzTfI9UrY0FQ16WlDxS_KEUB0oLQXseRfoYDuJSI';
+
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // State
 let testData = [];
@@ -45,23 +24,32 @@ const registerForm = document.getElementById('register-form');
 const toast = document.getElementById('toast');
 
 // Initialize
-function init() {
-    // Load data from LocalStorage
-    const storedData = localStorage.getItem('testShareData');
-    if (storedData) {
-        testData = JSON.parse(storedData);
-    } else {
-        testData = [...initialData];
-        saveData();
-    }
-    
+async function init() {
+    await loadData();
     renderCards(testData);
     setupEventListeners();
 }
 
-// Save Data
-function saveData() {
-    localStorage.setItem('testShareData', JSON.stringify(testData));
+// Load Data from Supabase
+async function loadData() {
+    const { data, error } = await db
+        .from('test_entries')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('データの読み込みに失敗しました:', error);
+        return;
+    }
+
+    testData = data.map(item => ({
+        id: item.id,
+        companyName: item.company_name,
+        testType: item.test_type,
+        testDate: item.test_date,
+        details: item.details,
+        createdAt: item.created_at
+    }));
 }
 
 // Get appropriate class for test tag
@@ -84,27 +72,28 @@ function formatDate(dateString) {
 // Render Cards
 function renderCards(data) {
     cardsContainer.innerHTML = '';
-    
+
     if (data.length === 0) {
         cardsContainer.classList.add('hidden');
         noResults.classList.remove('hidden');
         resultsCount.textContent = '0 件';
         return;
     }
-    
+
     cardsContainer.classList.remove('hidden');
     noResults.classList.add('hidden');
     resultsCount.textContent = `${data.length} 件`;
-    
-    // Sort by newest
+
     const sortedData = [...data].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    
+
     sortedData.forEach(item => {
         const card = document.createElement('div');
         card.className = 'card glass-panel';
-        
-        const testDateHtml = item.testDate ? `<span class="card-date"><i class="ph ph-calendar"></i> 受験時期: ${item.testDate}</span>` : '';
-        
+
+        const testDateHtml = item.testDate
+            ? `<span class="card-date"><i class="ph ph-calendar"></i> 受験時期: ${item.testDate}</span>`
+            : '';
+
         card.innerHTML = `
             <div class="card-header">
                 <div>
@@ -120,7 +109,7 @@ function renderCards(data) {
                 登録日: ${formatDate(item.createdAt)}
             </div>
         `;
-        
+
         cardsContainer.appendChild(card);
     });
 }
@@ -128,7 +117,7 @@ function renderCards(data) {
 // Basic HTML Sanitizer to prevent XSS
 function escapeHTML(str) {
     if (!str) return '';
-    return str.replace(/[&<>'"]/g, 
+    return str.replace(/[&<>'"]/g,
         tag => ({
             '&': '&amp;',
             '<': '&lt;',
@@ -143,22 +132,21 @@ function escapeHTML(str) {
 function handleFilter() {
     const searchTerm = searchInput.value.toLowerCase().trim();
     const filterType = filterSelect.value;
-    
+
     const filteredData = testData.filter(item => {
-        const matchSearch = item.companyName.toLowerCase().includes(searchTerm) || 
+        const matchSearch = item.companyName.toLowerCase().includes(searchTerm) ||
                             (item.details && item.details.toLowerCase().includes(searchTerm));
         const matchType = filterType === 'all' || item.testType === filterType;
-        
         return matchSearch && matchType;
     });
-    
+
     renderCards(filteredData);
 }
 
 // Modal Logic
 function openModal() {
     modal.classList.remove('hidden');
-    document.body.style.overflow = 'hidden'; // Prevent background scrolling
+    document.body.style.overflow = 'hidden';
 }
 
 function closeModal() {
@@ -176,50 +164,62 @@ function showToast() {
 
 // Setup Event Listeners
 function setupEventListeners() {
-    // Search and Filter
     searchInput.addEventListener('input', handleFilter);
     filterSelect.addEventListener('change', handleFilter);
-    
-    // Modal
+
     openModalBtn.addEventListener('click', openModal);
     closeModalBtn.addEventListener('click', closeModal);
     cancelBtn.addEventListener('click', closeModal);
-    
-    // Close modal on outside click
+
     modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            closeModal();
-        }
+        if (e.target === modal) closeModal();
     });
-    
-    // Form Submit
-    registerForm.addEventListener('submit', (e) => {
+
+    registerForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        
+
+        const submitBtn = registerForm.querySelector('[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.textContent = '登録中...';
+
         const companyName = document.getElementById('company-name').value;
         const testType = document.getElementById('test-type').value;
         const testDate = document.getElementById('test-date').value;
         const details = document.getElementById('details').value;
-        
-        const newItem = {
-            id: Date.now(),
-            companyName,
-            testType,
-            testDate,
-            details,
-            createdAt: new Date().toISOString()
-        };
-        
-        testData.push(newItem);
-        saveData();
-        
-        // Refresh view with current filters
+
+        const { data, error } = await db
+            .from('test_entries')
+            .insert([{
+                company_name: companyName,
+                test_type: testType,
+                test_date: testDate || null,
+                details: details || null
+            }])
+            .select()
+            .single();
+
+        submitBtn.disabled = false;
+        submitBtn.textContent = '登録する';
+
+        if (error) {
+            console.error('登録に失敗しました:', error);
+            alert('登録に失敗しました。もう一度お試しください。');
+            return;
+        }
+
+        testData.unshift({
+            id: data.id,
+            companyName: data.company_name,
+            testType: data.test_type,
+            testDate: data.test_date,
+            details: data.details,
+            createdAt: data.created_at
+        });
+
         handleFilter();
-        
         closeModal();
         showToast();
     });
 }
 
-// Run init when DOM is loaded
 document.addEventListener('DOMContentLoaded', init);
